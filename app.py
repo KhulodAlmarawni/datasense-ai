@@ -6,6 +6,10 @@ import json
 
 st.set_page_config(page_title="DataSense", page_icon="DS", layout="wide")
 
+# Memory optimization
+import gc
+gc.enable()
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -195,7 +199,7 @@ def detect_patterns(df):
     # 3. OUTLIER CLUSTER
     if num_cols:
         worst_col, worst_cnt, worst_pct = "", 0, 0
-        for col in num_cols[:8]:
+        for col in num_cols[:5]:
             lo,hi = outlier_bounds(df[col])
             cnt = int(((df[col]<lo)|(df[col]>hi)).sum())
             pct = cnt/len(df)*100
@@ -215,7 +219,7 @@ def detect_patterns(df):
     # 4. MULTICOLLINEARITY
     if len(num_cols) >= 2:
         try:
-            corr = df[num_cols[:10]].corr().abs()
+            corr = df[num_cols[:6]].corr().abs()
             np.fill_diagonal(corr.values, 0)
             max_corr = corr.max().max()
             if max_corr > 0.85:
@@ -233,7 +237,7 @@ def detect_patterns(df):
     # 5. DATA SKEWNESS
     if num_cols:
         skewed = []
-        for col in num_cols[:6]:
+        for col in num_cols[:5]:
             s = df[col].dropna()
             if len(s) > 30:
                 skewness = float(s.skew())
@@ -587,8 +591,12 @@ if not uploaded:
 
 # Load
 try:
-    df = pd.read_csv(uploaded, encoding='utf-8', on_bad_lines='skip') if uploaded.name.lower().endswith('.csv') else pd.read_excel(uploaded)
+    if uploaded.name.lower().endswith('.csv'):
+        df = pd.read_csv(uploaded, encoding='utf-8', on_bad_lines='skip', nrows=50000)
+    else:
+        df = pd.read_excel(uploaded, nrows=50000)
     df = df.dropna(how='all')
+    gc.collect()
 except Exception as e:
     st.error(f"Error reading file: {e}")
     st.stop()
@@ -732,7 +740,7 @@ else:
 
 if len(num_cols)>=2:
     try:
-        corr = df[num_cols[:8]].corr().abs()
+        corr = df[num_cols[:6]].corr().abs()
         np.fill_diagonal(corr.values, 0)
         max_c = corr.max().max()
         if max_c > 0.7:
@@ -745,7 +753,7 @@ if dupes > 0:
 
 if num_cols:
     skewed_cols = []
-    for col in num_cols[:6]:
+    for col in num_cols[:5]:
         try:
             sk = abs(float(df[col].dropna().skew()))
             if sk > 1.5: skewed_cols.append((col, sk))
@@ -785,7 +793,7 @@ for col in df.columns:
     pct = df[col].isnull().sum()/len(df)*100
     if pct>10: issues.append(("#ef4444", f"<b>{col}</b> — {pct:.1f}% missing. High impact on analysis accuracy."))
     elif pct>0: issues.append(("#f59e0b", f"<b>{col}</b> — {pct:.1f}% missing. Replace with 0, median, or mode."))
-for col in num_cols[:6]:
+for col in num_cols[:5]:
     lo,hi = outlier_bounds(df[col])
     cnt = int(((df[col]<lo)|(df[col]>hi)).sum())
     if cnt/len(df)>0.1: issues.append(("#ef4444", f"<b>{col}</b> — {cnt:,} outliers ({cnt/len(df)*100:.1f}%). Filter to range {lo:.0f}–{hi:.0f}."))
