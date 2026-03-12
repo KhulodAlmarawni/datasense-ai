@@ -238,7 +238,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-tool = st.radio("", ["Power BI","Python","SQL","Tableau","Excel"], horizontal=True, label_visibility="collapsed")
+tool = st.radio("Select your analytics tool:", ["Power BI","Python","SQL","Tableau","Excel"], horizontal=True)
 st.markdown("<br>", unsafe_allow_html=True)
 uploaded = st.file_uploader("Upload", type=["csv","xlsx","xls"], label_visibility="collapsed")
 
