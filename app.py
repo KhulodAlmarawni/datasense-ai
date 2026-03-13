@@ -359,46 +359,53 @@ def detect_patterns(df, metrics, time_cols, groups):
 # ══════════════════════════════════════════════════════
 
 def generate_questions(ds_type, metrics, groups, time_cols):
-    qs = []
+    m0 = metrics[0] if metrics else "key metric"
+    m1 = metrics[1] if len(metrics) > 1 else (metrics[0] if metrics else "metric 2")
+    g0 = groups[0] if groups else "segment"
+    t0 = time_cols[0] if time_cols else "date"
 
-    type_qs = {
+    all_qs = {
         "operations": [
-            ("What causes delivery delays?", f"Compare {metrics[0] if metrics else 'performance'} across {groups[0] if groups else 'segments'} and time periods.", "Operations"),
-            ("Which locations underperform?", f"Rank all {groups[0] if groups else 'groups'} by average {metrics[0] if metrics else 'metric'} — find the bottom 20%.", "Performance"),
+            ("What causes delivery delays?", f"Compare {m0} across {g0} and time periods — find the bottleneck.", "Operations"),
+            ("Which locations underperform?", f"Rank all {g0} by average {m0} — investigate the bottom 20%.", "Performance"),
+            (f"What is the peak hour for orders?", f"Group by hour and plot {m0} — find when demand spikes.", "Time"),
+            (f"Is there a {g0} with consistently high {m0}?", f"Compare {g0} distribution — look for consistently high or low performers.", "Segmentation"),
+            (f"Does {m0} correlate with {m1}?", f"Scatter plot {m0} vs {m1} — a strong correlation means one drives the other.", "Correlation"),
         ],
         "financial": [
-            ("What drives revenue growth?", f"Correlate {metrics[0] if metrics else 'revenue'} with time and category.", "Revenue"),
-            ("Where is margin lost?", "Compare cost vs revenue across segments.", "Profitability"),
-        ],
-        "market": [
-            ("Is the asset trending or ranging?", "Analyze price with rolling averages.", "Trend"),
-            ("What is the volatility profile?", "Compare std deviation across time periods.", "Risk"),
+            ("What drives revenue growth?", f"Correlate {m0} with time and {g0}.", "Revenue"),
+            ("Where is margin lost?", f"Compare cost vs revenue across {g0}.", "Profitability"),
+            (f"Which {g0} is most profitable?", f"Group by {g0}, rank by {m0} highest to lowest.", "Segmentation"),
+            (f"Is {m0} trending up or down?", f"Plot {m0} over {t0} — add a trend line.", "Trend"),
+            (f"Does {m0} correlate with {m1}?", f"Scatter plot {m0} vs {m1} to find the relationship.", "Correlation"),
         ],
         "hr": [
-            ("What predicts retention?", "Correlate tenure with compensation and performance.", "Retention"),
-            ("Is there pay equity?", "Compare compensation across departments.", "Equity"),
+            ("What predicts retention?", f"Correlate tenure with {m0}.", "Retention"),
+            ("Is there pay equity?", f"Compare {m0} across {g0}.", "Equity"),
+            (f"Which {g0} has the highest {m0}?", f"Rank {g0} by avg {m0}.", "Segmentation"),
+            (f"How has {m0} changed over time?", f"Plot {m0} by {t0}.", "Trend"),
+            (f"Does {m0} affect {m1}?", f"Scatter {m0} vs {m1}.", "Correlation"),
         ],
         "product": [
             ("Where do users drop off?", "Analyze conversion rates across funnel stages.", "Funnel"),
             ("What drives retention?", "Compare retained vs churned user behavior.", "Retention"),
+            (f"Which {g0} has the best engagement?", f"Rank {g0} by avg {m0}.", "Segmentation"),
+            (f"How does {m0} change over time?", f"Plot {m0} by {t0}.", "Trend"),
+            (f"Does {m0} correlate with {m1}?", f"Scatter {m0} vs {m1}.", "Correlation"),
         ],
     }
 
-    qs.extend(type_qs.get(ds_type, [
-        ("What are the key trends?", f"Analyze {metrics[0] if metrics else 'key metrics'} over time.", "Trend"),
-        ("Which segment performs best?", f"Compare {groups[0] if groups else 'groups'} by {metrics[0] if metrics else 'metric'}.", "Segmentation"),
-    ]))
+    default = [
+        (f"What are the trends in {m0}?", f"Plot {m0} over {t0} — identify peaks and drops.", "Trend"),
+        (f"Which {g0} performs best?", f"Group by {g0}, rank by avg {m0}.", "Segmentation"),
+        (f"Are there outliers in {m0}?", f"Box plot {m0} — flag values outside normal range.", "Quality"),
+        (f"Does {m0} correlate with {m1}?", f"Scatter {m0} vs {m1} — look for patterns.", "Correlation"),
+        (f"What is the distribution of {m0}?", f"Histogram of {m0} — check if mean equals median.", "Distribution"),
+    ]
 
-    if time_cols and metrics:
-        qs.append((f"How does {metrics[0]} change over time?", f"Plot {metrics[0]} by {time_cols[0]} — look for trends, peaks, and drops.", "Time Analysis"))
+    return all_qs.get(ds_type, default)[:5]
 
-    if groups and metrics:
-        qs.append((f"Which {groups[0]} has the best {metrics[0]}?", f"Group by {groups[0]}, calculate avg {metrics[0]}, rank best to worst.", "Segmentation"))
 
-    if len(metrics) >= 2:
-        qs.append((f"Does {metrics[0]} affect {metrics[1]}?", f"Scatter plot of {metrics[0]} vs {metrics[1]} — look for correlation or clusters.", "Correlation"))
-
-    return qs[:5]
 
 
 # ══════════════════════════════════════════════════════
