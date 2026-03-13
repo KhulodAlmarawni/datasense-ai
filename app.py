@@ -3,9 +3,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import gc
-
+ 
 st.set_page_config(page_title="DataSense", page_icon="DS", layout="wide")
-
+ 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -74,40 +74,40 @@ html,body,[class*="css"]{font-family:'Syne',sans-serif;}
 .idot{width:6px;height:6px;border-radius:50%;margin-top:6px;flex-shrink:0;}
 </style>
 """, unsafe_allow_html=True)
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # SMART COLUMN CLASSIFIER
 # ══════════════════════════════════════════════════════
-
+ 
 def classify_column(col_name, series):
     """Classify column into: id, metric, group, time, location, flag, useless"""
     name = col_name.lower().replace('_',' ').replace('-',' ')
     filled = series.dropna()
-
+ 
     # Time detection
     try:
         pd.to_datetime(filled.iloc[:20], format="mixed", dayfirst=False)
         return "time"
     except: pass
-
+ 
     # ID detection — high cardinality + numeric or name contains id/key/code patterns
     id_keywords = ['_id','_key','_code','_num','_no ','_ref','_uuid','_hash']
     is_id_name = any(k in f' {name} ' or name.endswith(k.strip()) for k in id_keywords)
     is_high_card = filled.nunique() / len(filled) > 0.7 if len(filled) > 0 else False
-
+ 
     if is_id_name and is_high_card:
         return "id"
-
+ 
     # Useless — single value
     if filled.nunique() <= 1:
         return "useless"
-
+ 
     # Location detection
     loc_keywords = ['lat','lon','lng','latitude','longitude','coordinate','location','geo']
     if any(k in name for k in loc_keywords):
         return "location"
-
+ 
     # Time-like numbers (hour, day, month, year, week)
     time_keywords = ['hour','day','month','year','week','quarter','date','time','period']
     if any(k in name for k in time_keywords):
@@ -120,7 +120,7 @@ def classify_column(col_name, series):
             if 'year' in name and nums.nunique() <= 10:
                 return "time_num"
         except: pass
-
+ 
     # Numeric metric
     try:
         nums = pd.to_numeric(filled, errors='coerce').dropna()
@@ -133,14 +133,14 @@ def classify_column(col_name, series):
                 return "group_num"
             return "metric"
     except: pass
-
+ 
     # Categorical group
     if filled.nunique() <= 50:
         return "group"
-
+ 
     return "text"
-
-
+ 
+ 
 def get_real_metrics(df):
     """Return only true metric columns — no IDs, no locations, no useless"""
     metrics = []
@@ -149,7 +149,7 @@ def get_real_metrics(df):
         if role == "metric":
             metrics.append(col)
     return metrics
-
+ 
 def get_groups(df):
     """Return good grouping columns"""
     groups = []
@@ -158,7 +158,7 @@ def get_groups(df):
         if role in ("group", "group_num", "time_num"):
             groups.append(col)
     return groups
-
+ 
 def get_time_cols(df):
     """Return time columns"""
     times = []
@@ -167,16 +167,16 @@ def get_time_cols(df):
         if role in ("time", "time_num"):
             times.append(col)
     return times
-
+ 
 def get_useless(df):
     """Return useless columns"""
     return [col for col in df.columns if classify_column(col, df[col]) in ("useless", "id")]
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # SMART OUTLIER BOUNDS (never negative for physical values)
 # ══════════════════════════════════════════════════════
-
+ 
 def smart_bounds(col_name, series):
     """Calculate outlier bounds with domain logic"""
     s = series.dropna()
@@ -184,50 +184,50 @@ def smart_bounds(col_name, series):
     iqr = q3 - q1
     lo = q1 - 1.5 * iqr
     hi = q3 + 1.5 * iqr
-
+ 
     name = col_name.lower()
     # Physical values that can't be negative
     non_negative = ['time','seconds','minutes','hours','price','cost','amount','cents','fee',
                     'distance','count','total','items','skus','rate','score','age','weight']
     if any(k in name for k in non_negative):
         lo = max(0, lo)
-
+ 
     return round(lo, 1), round(hi, 1)
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # SMART MISSING VALUE ADVICE
 # ══════════════════════════════════════════════════════
-
+ 
 def missing_advice(col_name, series, df):
     """Give smart advice for missing values based on column context"""
     name = col_name.lower()
     miss_pct = series.isnull().sum() / len(df) * 100
-
+ 
     # Financial/reward columns — missing likely means zero
     if any(k in name for k in ['cashback','bonus','reward','discount','promo']):
         return f"Missing likely means no cashback. Safe to replace with 0."
-
+ 
     # Location — missing means unknown location, don't replace with 0
     if any(k in name for k in ['lat','lon','lng','latitude','longitude']):
         return f"Missing location data ({miss_pct:.1f}%). Exclude these rows from geographic analysis — do NOT replace with 0."
-
+ 
     # Time columns
     if any(k in name for k in ['time','seconds','minutes','duration']):
         return f"Replace with median ({series.median():.1f}) — more robust than mean for time data."
-
+ 
     # Price/amount
     if any(k in name for k in ['price','amount','cents','fee','cost']):
         return f"Replace with 0 if absence means no charge, or median ({series.median():.1f}) if it's a recording gap."
-
+ 
     # Default
     return f"Replace with median ({series.median():.1f}) or remove rows if critical field."
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════
-
+ 
 @st.cache_data(max_entries=3)
 def load_data(file_bytes, fname):
     import io
@@ -236,7 +236,7 @@ def load_data(file_bytes, fname):
     else:
         df = pd.read_excel(io.BytesIO(file_bytes), nrows=30000)
     return df.dropna(how='all')
-
+ 
 TS = {
     "metric":   ("#00e5ff","rgba(0,229,255,0.08)","rgba(0,229,255,0.2)","METRIC"),
     "time":     ("#10b981","rgba(16,185,129,0.08)","rgba(16,185,129,0.2)","TIME"),
@@ -252,7 +252,7 @@ TS = {
 def ttag(t):
     c,bg,bd,l = TS.get(t, ("#6b6b9a","rgba(107,107,154,0.08)","rgba(107,107,154,0.2)","?"))
     return f'<span class="tag" style="color:{c};background:{bg};border:1px solid {bd}">{l}</span>'
-
+ 
 def qscore(df, metrics):
     score = 100
     total = df.shape[0] * df.shape[1]
@@ -267,7 +267,7 @@ def qscore(df, metrics):
         except: pass
     score -= min(15, df.duplicated().sum() / len(df) * 100 * 2)
     return max(0, round(score))
-
+ 
 def detect_dataset_type(df):
     cs = " ".join(df.columns.str.lower())
     if any(x in cs for x in ['delivery','order','store','logistics','picking']): return "operations"
@@ -277,15 +277,15 @@ def detect_dataset_type(df):
     if any(x in cs for x in ['patient','hospital','medical','diagnosis']): return "healthcare"
     if any(x in cs for x in ['customer','user','session','click','retention']): return "product"
     return "general"
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # PATTERN DETECTION (uses real metrics only)
 # ══════════════════════════════════════════════════════
-
+ 
 def detect_patterns(df, metrics, time_cols, groups):
     pts = []
-
+ 
     # Trend on real metrics
     if time_cols and metrics:
         try:
@@ -302,7 +302,7 @@ def detect_patterns(df, metrics, time_cols, groups):
                     c = "#10b981" if ch > 0 else "#ef4444"
                     pts.append({"t":f"{'Up' if ch>0 else 'Down'}ward Trend","c":c,"s":f"{'+' if ch>0 else ''}{ch:.1f}%","b":f"<b style='color:{c}'>{col}</b> {'grew' if ch>0 else 'declined'} {abs(ch):.1f}% over the dataset period.","a":f"Use Line Chart: {time_cols[0]} on X-axis, {col} on Y-axis."})
         except: pass
-
+ 
     # Outliers on real metrics only
     if metrics:
         wc, wn, wp = "", 0, 0
@@ -316,7 +316,7 @@ def detect_patterns(df, metrics, time_cols, groups):
         if wn > 0 and wp > 5:
             lo, hi = smart_bounds(wc, df[wc])
             pts.append({"t":"Outlier Cluster","c":"#ef4444","s":f"{wn:,} rows","b":f"<b style='color:#ef4444'>{wc}</b> has {wn:,} outliers ({wp:.1f}%). Valid range: {lo}–{hi}.","a":f"Filter: keep rows where {wc} is between {lo} and {hi}."})
-
+ 
     # Correlation between real metrics
     if len(metrics) >= 2:
         try:
@@ -327,7 +327,7 @@ def detect_patterns(df, metrics, time_cols, groups):
                 idx = cr.stack().idxmax()
                 pts.append({"t":"Multicollinearity","c":"#f59e0b","s":f"r={mx:.2f}","b":f"<b style='color:#f59e0b'>{idx[0]}</b> and <b style='color:#f59e0b'>{idx[1]}</b> are {mx*100:.0f}% correlated. Using both causes double-counting.","a":"Keep one as primary metric. Derive the other only when needed."})
         except: pass
-
+ 
     # Skewness on real metrics
     if metrics:
         sk = []
@@ -339,22 +339,22 @@ def detect_patterns(df, metrics, time_cols, groups):
         if sk:
             col, s = max(sk, key=lambda x: x[1])
             pts.append({"t":"Skewed Distribution","c":"#06b6d4","s":f"skew:{s:.1f}","b":f"<b style='color:#06b6d4'>{col}</b> is heavily skewed (skewness={s:.1f}). Mean is misleading here.","a":f"Use Median instead of Average for {col} in KPI cards."})
-
+ 
     # Useless columns warning
     useless = get_useless(df)
     if useless:
         pts.append({"t":"Low-Value Columns","c":"#6b6b9a","s":f"{len(useless)} cols","b":f"Columns <b style='color:#6b6b9a'>{', '.join(useless[:4])}</b> are IDs or single-value — they add no analytical value.","a":"Remove these columns before building your dashboard."})
-
+ 
     return pts[:4]
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # QUESTIONS (uses real metrics + groups)
 # ══════════════════════════════════════════════════════
-
+ 
 def generate_questions(ds_type, metrics, groups, time_cols):
     qs = []
-
+ 
     type_qs = {
         "operations": [
             ("What causes delivery delays?", f"Compare {metrics[0] if metrics else 'performance'} across {groups[0] if groups else 'segments'} and time periods.", "Operations"),
@@ -377,36 +377,36 @@ def generate_questions(ds_type, metrics, groups, time_cols):
             ("What drives retention?", "Compare retained vs churned user behavior.", "Retention"),
         ],
     }
-
+ 
     qs.extend(type_qs.get(ds_type, [
         ("What are the key trends?", f"Analyze {metrics[0] if metrics else 'key metrics'} over time.", "Trend"),
         ("Which segment performs best?", f"Compare {groups[0] if groups else 'groups'} by {metrics[0] if metrics else 'metric'}.", "Segmentation"),
     ]))
-
+ 
     if time_cols and metrics:
         qs.append((f"How does {metrics[0]} change over time?", f"Plot {metrics[0]} by {time_cols[0]} — look for trends, peaks, and drops.", "Time Analysis"))
-
+ 
     if groups and metrics:
         qs.append((f"Which {groups[0]} has the best {metrics[0]}?", f"Group by {groups[0]}, calculate avg {metrics[0]}, rank best to worst.", "Segmentation"))
-
+ 
     if len(metrics) >= 2:
         qs.append((f"Does {metrics[0]} affect {metrics[1]}?", f"Scatter plot of {metrics[0]} vs {metrics[1]} — look for correlation or clusters.", "Correlation"))
-
+ 
     return qs[:5]
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # CLEANING CODE (uses real metrics + smart bounds)
 # ══════════════════════════════════════════════════════
-
+ 
 def cleaning_code(df, tool, metrics, null_cols):
     d = df.duplicated().sum()
     steps = []
-
+ 
     # Get first real null metric
     null_metrics = [c for c in null_cols if classify_column(c, df[c]) == "metric"]
     null_col = null_metrics[0] if null_metrics else (null_cols[0] if null_cols else None)
-
+ 
     if tool == "Power BI":
         if d > 0: steps.append("// Remove duplicates\n= Table.Distinct(Source)")
         if null_col:
@@ -417,7 +417,7 @@ def cleaning_code(df, tool, metrics, null_cols):
             steps.append(f'// Remove outliers in {metrics[0]}\n= Table.SelectRows(Source,\n  each [{metrics[0]}] >= {lo}\n  and [{metrics[0]}] <= {hi})')
         steps.append('// Set column types\n= Table.TransformColumnTypes(Source,\n  {{"date_col", type date},\n   {"id_col", type text}})')
         return steps, "Power Query"
-
+ 
     elif tool == "Python":
         if d > 0: steps.append("# Remove duplicates\ndf = df.drop_duplicates()")
         if null_col:
@@ -428,7 +428,7 @@ def cleaning_code(df, tool, metrics, null_cols):
             lo, hi = smart_bounds(metrics[0], df[metrics[0]])
             steps.append(f'# Remove outliers in {metrics[0]}\ndf = df[\n  (df["{metrics[0]}"] >= {lo}) &\n  (df["{metrics[0]}"] <= {hi})\n]')
         return steps, "Python (pandas)"
-
+ 
     elif tool == "SQL":
         if d > 0: steps.append("-- Remove duplicates\nSELECT DISTINCT * FROM your_table;")
         if null_col:
@@ -438,7 +438,7 @@ def cleaning_code(df, tool, metrics, null_cols):
             lo, hi = smart_bounds(metrics[0], df[metrics[0]])
             steps.append(f'-- Filter outliers in {metrics[0]}\nSELECT * FROM your_table\nWHERE "{metrics[0]}" BETWEEN {lo} AND {hi};')
         return steps, "SQL"
-
+ 
     elif tool == "Tableau":
         steps.append("// Remove duplicates\nTableau Prep > Clean > Remove Duplicates")
         if null_col:
@@ -448,7 +448,7 @@ def cleaning_code(df, tool, metrics, null_cols):
             lo, hi = smart_bounds(metrics[0], df[metrics[0]])
             steps.append(f'// Filter outliers in {metrics[0]}\n[{metrics[0]}] >= {lo}\nAND [{metrics[0]}] <= {hi}')
         return steps, "Tableau Prep"
-
+ 
     else:  # Excel
         steps.append("// Remove duplicates\nData > Remove Duplicates")
         if null_col:
@@ -458,53 +458,53 @@ def cleaning_code(df, tool, metrics, null_cols):
             lo, hi = smart_bounds(metrics[0], df[metrics[0]])
             steps.append(f'// Filter outliers in {metrics[0]}\n=AND({metrics[0]}>{lo}, {metrics[0]}<{hi})')
         return steps, "Excel"
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # MEASURES (uses real metrics + groups only)
 # ══════════════════════════════════════════════════════
-
+ 
 def get_measures(tool, metrics, groups, time_cols):
     ms = []
     m = metrics[0] if metrics else None
     g = groups[0] if groups else None
     m2 = metrics[1] if len(metrics) > 1 else None
-
+ 
     if tool == "Power BI":
         if m: ms.append((f"Avg {m}", f"Avg {m} =\nAVERAGE(Data[{m}])"))
         if m: ms.append((f"Median {m}", f"Median {m} =\nMEDIANX(Data, Data[{m}])"))
         if m and g: ms.append((f"Top {g} by {m}", f"Top {g} =\nCALCULATE(\n  MAX(Data[{g}]),\n  TOPN(1, VALUES(Data[{g}]),\n  CALCULATE(AVERAGE(Data[{m}])),DESC)\n)"))
         if m: ms.append(("% Above Average", f"Pct Above Avg =\nDIVIDE(\n  COUNTROWS(FILTER(Data,\n    Data[{m}] > CALCULATE(\n      AVERAGE(Data[{m}]),ALL(Data)))),\n  COUNTROWS(Data)\n)*100"))
-
+ 
     elif tool == "Python":
         if m: ms.append(("Summary Stats", f"df['{m}'].describe()\n# Key: mean vs median gap\nprint('Mean:', df['{m}'].mean().round(1))\nprint('Median:', df['{m}'].median().round(1))"))
         if m and g: ms.append(("Group Analysis", f"df.groupby('{g}')['{m}'].agg(\n  ['mean','median','count']\n).sort_values('mean', ascending=False)"))
         if m and m2: ms.append(("Correlation", f"df[['{m}','{m2}']].corr()\n# Scatter plot:\nimport matplotlib.pyplot as plt\nplt.scatter(df['{m}'], df['{m2}'])\nplt.show()"))
-
+ 
     elif tool == "SQL":
         if m and g:
             ms.append(("Performance by Group", f"SELECT\n  \"{g}\",\n  AVG(\"{m}\") as avg_{m.split('_')[0]},\n  PERCENTILE_CONT(0.5)\n    WITHIN GROUP (ORDER BY \"{m}\")\n    as median_{m.split('_')[0]},\n  COUNT(*) as total\nFROM your_table\nGROUP BY \"{g}\"\nORDER BY avg_{m.split('_')[0]} DESC;"))
         if m: ms.append(("Outlier Detection", f"SELECT * FROM your_table\nWHERE \"{m}\" > (\n  SELECT AVG(\"{m}\") + 2*STDDEV(\"{m}\")\n  FROM your_table\n);"))
-
+ 
     elif tool == "Tableau":
         if m: ms.append((f"Avg {m}", f"AVG([{m}])"))
         if m: ms.append((f"Median {m}", f"MEDIAN([{m}])"))
         if m and g: ms.append(("% of Total", f"SUM([{m}]) /\nTOTAL(SUM([{m}]))"))
         if m and time_cols: ms.append(("YoY Change", f"(SUM([{m}]) - LOOKUP(SUM([{m}]),-1))\n/ ABS(LOOKUP(SUM([{m}]),-1))"))
-
+ 
     else:  # Excel
         if m: ms.append(("Average", f"=AVERAGE({m}:{m})"))
         if m: ms.append(("Median", f"=MEDIAN({m}:{m})"))
         if m and g: ms.append(("AVERAGEIF", f"=AVERAGEIF(\n  {g}:{g},\"value\",\n  {m}:{m})"))
         if m: ms.append(("Above Average Count", f"=COUNTIF({m}:{m},\n  \">\"&AVERAGE({m}:{m}))"))
-
+ 
     return ms[:4]
-
-
+ 
+ 
 # ══════════════════════════════════════════════════════
 # HEADER
 # ══════════════════════════════════════════════════════
-
+ 
 st.markdown("""
 <div class="hero">
   <div class="badge">NO API KEY &nbsp;&nbsp;FREE &nbsp;&nbsp;ANY TOOL</div>
@@ -512,29 +512,29 @@ st.markdown("""
   <div style="font-size:13px;color:#3a3a5a;font-family:'JetBrains Mono'">Instant deep analysis for any analytics tool — no setup required</div>
 </div>
 """, unsafe_allow_html=True)
-
+ 
 # Tool selector — label above, pills below, no box wrapper
 st.markdown('<div class="tool-label">Your analytics tool</div>', unsafe_allow_html=True)
 tool = st.radio("Your analytics tool", ["Power BI", "Python", "SQL", "Tableau", "Excel"], horizontal=True, label_visibility="hidden")
 st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-
+ 
 # Upload zone — custom HTML above the actual uploader
 st.markdown("""
 <div style="font-size:11px;font-family:'JetBrains Mono';color:#3a3a5a;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Upload your dataset</div>
 <div style="font-size:13px;color:#4a4a6a;font-family:'JetBrains Mono';margin-bottom:8px">Drop CSV or Excel below — up to 30,000 rows analyzed</div>
 """, unsafe_allow_html=True)
 uploaded = st.file_uploader("Upload dataset", type=["csv","xlsx","xls"], label_visibility="collapsed")
-
+ 
 if not uploaded:
     st.stop()
-
+ 
 try:
     df = load_data(uploaded.read(), uploaded.name)
     gc.collect()
 except Exception as e:
     st.error(f"Error: {e}")
     st.stop()
-
+ 
 # Smart column classification
 metrics = get_real_metrics(df)
 groups = get_groups(df)
@@ -547,7 +547,7 @@ dupes = df.duplicated().sum()
 score = qscore(df, metrics)
 sc = "#10b981" if score>=80 else "#f59e0b" if score>=60 else "#ef4444"
 ds_type = detect_dataset_type(df)
-
+ 
 # ── KPIs ─────────────────────────────────────────────
 c1,c2,c3,c4 = st.columns(4)
 for col,l,v,s,a in [
@@ -558,7 +558,7 @@ for col,l,v,s,a in [
 ]:
     with col:
         st.markdown(f'<div class="kpi" style="--a:{a}"><div class="kpi-l">{l}</div><div class="kpi-v" style="color:{a}">{v}</div><div class="kpi-s">{s}</div></div>', unsafe_allow_html=True)
-
+ 
 # ── DATA STORY ────────────────────────────────────────
 type_map = {"operations":"OPERATIONS","financial":"FINANCIAL","market":"MARKET DATA","hr":"HR","healthcare":"HEALTHCARE","product":"PRODUCT","general":"GENERAL"}
 st.markdown('<div class="sec">Data Story</div>', unsafe_allow_html=True)
@@ -575,7 +575,7 @@ if useless_cols: parts.append(f"<b style='color:#6b6b9a'>{len(useless_cols)} ID/
 quality_txt = "excellent condition" if score>=85 else "moderate quality" if score>=65 else "quality issues"
 parts.append(f"Data quality: <b style='color:{sc}'>{quality_txt}</b> ({score}/100)")
 st.markdown(f'<div style="background:#0d0d1a;border:1px solid #1e1e35;border-left:3px solid #6366f1;border-radius:14px;padding:24px 28px"><span class="badge">{type_map.get(ds_type,"DATA")}</span><div style="font-size:16px;font-weight:600;color:#e2e2f0;line-height:1.9">{" — ".join(parts)}.</div></div>', unsafe_allow_html=True)
-
+ 
 # ── PATTERN DETECTION ─────────────────────────────────
 pts = detect_patterns(df, metrics, time_cols, groups)
 gc.collect()
@@ -589,7 +589,7 @@ if pts:
                 st.markdown(f'<div class="pc" style="--c:{p["c"]}"><div class="pt">{p["t"]}</div><div class="ps">{p["s"]}</div><div class="pb">{p["b"]}</div><div class="pa"><span style="color:{p["c"]}">ACTION: </span>{p["a"]}</div></div>', unsafe_allow_html=True)
 else:
     st.markdown('<div style="background:#0d0d1a;border:1px solid #1e1e35;border-radius:12px;padding:20px;color:#6b6b9a;font-family:JetBrains Mono;font-size:13px">No significant patterns detected.</div>', unsafe_allow_html=True)
-
+ 
 # ── COLUMN PROFILE ────────────────────────────────────
 st.markdown('<div class="sec">Column Profile</div>', unsafe_allow_html=True)
 for i in range(0, len(df.columns), 4):
@@ -614,7 +614,7 @@ for i in range(0, len(df.columns), 4):
             extra = "single value — remove"
         with g[j]:
             st.markdown(f'<div class="card"><div class="cn" title="{cn}">{cn[:18]}{"..." if len(cn)>18 else ""}</div><div style="margin:4px 0 8px">{ttag(role)}</div><div class="bw"><div class="bf" style="width:{pct}%;background:{c_bar}"></div></div><div class="cm">{pct}% filled | {uniq} unique{(" | "+extra) if extra else ""}</div></div>', unsafe_allow_html=True)
-
+ 
 # ── CRITICAL ISSUES ───────────────────────────────────
 st.markdown('<div class="sec">Critical Issues</div>', unsafe_allow_html=True)
 iss = []
@@ -634,13 +634,13 @@ if dupes > 0: iss.append(("#ef4444", f"<b>{dupes:,} duplicate rows</b> — remov
 if useless_cols: iss.append(("#6b6b9a", f"<b>Low-value columns:</b> {', '.join(useless_cols[:5])} — consider removing."))
 if not iss: iss.append(("#10b981", "No critical issues found. Dataset is clean and ready."))
 st.markdown('<div style="background:#0d0d1a;border:1px solid #1e1e35;border-radius:12px;padding:16px 20px">' + "".join([f'<div class="ii"><div class="idot" style="background:{c}"></div><div>{t}</div></div>' for c,t in iss[:7]]) + '</div>', unsafe_allow_html=True)
-
+ 
 # ── CLEANING STEPS ────────────────────────────────────
 steps, lang = cleaning_code(df, tool, metrics, null_cols)
 st.markdown(f'<div class="sec">Cleaning Steps — {lang}</div>', unsafe_allow_html=True)
 for s in steps:
     st.markdown(f'<div class="cb">{s}</div>', unsafe_allow_html=True)
-
+ 
 # ── MEASURES ─────────────────────────────────────────
 ms = get_measures(tool, metrics, groups, time_cols)
 tlabels = {"Power BI":"DAX Measures","Python":"Python Snippets","SQL":"SQL Queries","Tableau":"Calculated Fields","Excel":"Excel Formulas"}
@@ -649,12 +649,12 @@ g1, g2 = st.columns(2)
 for i,(title,code) in enumerate(ms):
     with (g1 if i%2==0 else g2):
         st.markdown(f'<div class="ct">{title}</div><div class="cb">{code}</div>', unsafe_allow_html=True)
-
+ 
 # ── QUESTIONS ─────────────────────────────────────────
 qs = generate_questions(ds_type, metrics, groups, time_cols)
 st.markdown('<div class="sec">5 Questions Worth Answering</div>', unsafe_allow_html=True)
 st.markdown('<div style="background:#0d0d1a;border:1px solid #1e1e35;border-radius:12px;padding:16px 20px">' + "".join([f'<div class="qi"><div class="qn">0{i+1}</div><div><div class="qt">{q}</div><div class="qw">{w}</div></div></div>' for i,(q,w,_) in enumerate(qs)]) + '</div>', unsafe_allow_html=True)
-
+ 
 # ── GROUP COMPARISON ──────────────────────────────────
 if groups and metrics and df[groups[0]].nunique() <= 50:
     g_col, m_col = groups[0], metrics[0]
@@ -672,7 +672,7 @@ if groups and metrics and df[groups[0]].nunique() <= 50:
         bc = "#10b981" if idx_r<total_g*0.33 else "#f59e0b" if idx_r<total_g*0.66 else "#ef4444"
         rows_html += f'<tr><td style="padding:8px 12px">{rank}</td><td style="padding:8px 12px;color:#e2e2f0;font-weight:600;font-family:JetBrains Mono;font-size:12px">{row[g_col]}</td><td style="padding:8px 12px"><div style="display:flex;align-items:center;gap:8px"><div style="width:{bw}px;height:5px;background:{bc};border-radius:3px"></div><span style="color:#e2e2f0;font-family:JetBrains Mono;font-size:12px">{row["Mean"]:.1f}</span></div></td><td style="padding:8px 12px;color:#6b6b9a;font-family:JetBrains Mono;font-size:12px">{row["Median"]:.1f}</td><td style="padding:8px 12px;color:#6b6b9a;font-family:JetBrains Mono;font-size:12px">{int(row["Count"]):,}</td></tr>'
     st.markdown(f'<table style="width:100%;border-collapse:collapse;background:#0d0d1a;border:1px solid #1e1e35;border-radius:12px;overflow:hidden"><thead><tr style="border-bottom:1px solid #1e1e35"><th style="padding:8px 12px;color:#6b6b9a;text-align:left;font-size:10px;font-family:JetBrains Mono;letter-spacing:1px;text-transform:uppercase">#</th><th style="padding:8px 12px;color:#6b6b9a;text-align:left;font-size:10px;font-family:JetBrains Mono;letter-spacing:1px;text-transform:uppercase">{g_col}</th><th style="padding:8px 12px;color:#6b6b9a;text-align:left;font-size:10px;font-family:JetBrains Mono;letter-spacing:1px;text-transform:uppercase">Mean</th><th style="padding:8px 12px;color:#6b6b9a;text-align:left;font-size:10px;font-family:JetBrains Mono;letter-spacing:1px;text-transform:uppercase">Median</th><th style="padding:8px 12px;color:#6b6b9a;text-align:left;font-size:10px;font-family:JetBrains Mono;letter-spacing:1px;text-transform:uppercase">Count</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-
+ 
 # ── FINAL VERDICT ─────────────────────────────────────
 st.markdown('<div class="sec">Final Verdict</div>', unsafe_allow_html=True)
 verdict = "READY" if score>=80 else "NEEDS WORK" if score>=60 else "CRITICAL"
@@ -685,6 +685,6 @@ with c1:
 with c2:
     rh = "".join([f'<div style="padding:8px 0;border-bottom:1px solid #1e1e35;font-family:JetBrains Mono;font-size:13px;color:#c4c4e0"><span style="color:{sc};margin-right:10px">0{i+1}</span>{v}</div>' for i,v in enumerate(vis)])
     st.markdown(f'<div style="background:#0d0d1a;border:1px solid #1e1e35;border-radius:14px;padding:20px 24px"><div class="sec" style="margin-top:0">Recommended {tool} Visuals</div>{rh}</div>', unsafe_allow_html=True)
-
+ 
 gc.collect()
 st.markdown("<br>", unsafe_allow_html=True)
