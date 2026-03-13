@@ -520,15 +520,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Tool selector — label above, pills below, no box wrapper
-st.markdown('<div class="tool-label">Your analytics tool</div>', unsafe_allow_html=True)
-tool = st.radio("Your analytics tool", ["Power BI", "Python", "SQL", "Tableau", "Excel"], horizontal=True, label_visibility="hidden")
-st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
-# Upload zone — custom HTML above the actual uploader
-st.markdown("""
-<div style="font-size:11px;font-family:'JetBrains Mono';color:#3a3a5a;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Upload your dataset</div>
-<div style="font-size:13px;color:#4a4a6a;font-family:'JetBrains Mono';margin-bottom:8px">Drop CSV or Excel below — up to 30,000 rows analyzed</div>
-""", unsafe_allow_html=True)
 uploaded = st.file_uploader("Upload dataset", type=["csv","xlsx","xls"], label_visibility="collapsed")
 
 if not uploaded:
