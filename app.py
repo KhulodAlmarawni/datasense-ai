@@ -101,10 +101,10 @@ def classify_column(col_name, series):
     if any(k in name for k in loc_keywords):
         return "location"
 
-    # ID detection — name has id/key pattern AND high cardinality
-    id_keywords = ['_id','_key','_uuid','_hash','_ref']
-    is_id_name = any(name.endswith(k.strip('_')) or f' {k.strip()} ' in f' {name} ' for k in id_keywords)
-    is_high_card = filled.nunique() / len(filled) > 0.7 if len(filled) > 0 else False
+    # ID detection — name ends with id/key/code OR high cardinality number
+    id_suffixes = ['_id', ' id', '_key', ' key', '_uuid', '_hash', '_ref', '_code', '_no', '_num']
+    is_id_name = any(name == k.strip() or name.endswith(k) for k in id_suffixes)
+    is_high_card = filled.nunique() / len(filled) > 0.6 if len(filled) > 0 else False
     if is_id_name and is_high_card:
         return "id"
 
