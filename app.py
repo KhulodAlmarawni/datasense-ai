@@ -216,29 +216,50 @@ def missing_advice(col_name, series, df):
     """Give smart advice for missing values based on column context"""
     name = col_name.lower()
     miss_pct = series.isnull().sum() / len(df) * 100
+    filled = series.dropna()
 
-    # Financial/reward columns — missing likely means zero
-    if any(k in name for k in ['cashback','bonus','reward','discount','promo']):
-        return f"Missing likely means no cashback. Safe to replace with 0."
+    # Helper: safe median for numeric
+    def safe_median(s):
+        try:
+            m = pd.to_numeric(s, errors='coerce').median()
+            return None if pd.isna(m) else m
+        except: return None
 
-    # Location — missing means unknown location, don't replace with 0
+    # Helper: most frequent value
+    def top_val(s):
+        try:
+            top = s.mode()
+            return f'"{top.iloc[0]}"' if len(top) > 0 else "most frequent value"
+        except: return "most frequent value"
+
+    # Financial/reward — missing = zero
+    if any(k in name for k in ['cashback','bonus','reward','promo']):
+        return "Missing likely means no cashback. Safe to replace with 0."
+
+    # Location — don't replace with 0
     if any(k in name for k in ['lat','lon','lng','latitude','longitude']):
         return f"Missing location data ({miss_pct:.1f}%). Exclude these rows from geographic analysis — do NOT replace with 0."
 
-    # Time columns
+    # Numeric time/duration columns
     if any(k in name for k in ['time','seconds','minutes','duration']):
-        return f"Replace with median ({series.median():.1f}) — more robust than mean for time data."
+        med = safe_median(series)
+        if med is not None:
+            return f"Replace with median ({med:.1f}) — more robust than mean for time data."
 
-    # Price/amount
+    # Price/amount/cost
     if any(k in name for k in ['price','amount','cents','fee','cost']):
-        return f"Replace with 0 if absence means no charge, or median ({series.median():.1f}) if it's a recording gap."
+        med = safe_median(series)
+        if med is not None:
+            return f"Replace with 0 if absence means no charge, or median ({med:.1f}) if it's a recording gap."
 
-    # Default
-    try:
-        med = pd.to_numeric(series, errors='coerce').median()
-        return f"Replace with median ({med:.1f}) or remove rows if critical field."
-    except:
-        return f"Replace with most frequent value or remove rows if critical field."
+    # Text/categorical columns — use mode
+    med = safe_median(series)
+    if med is None:
+        tv = top_val(filled)
+        return f"Text column — replace with most frequent value ({tv}) or remove rows."
+
+    # Numeric default
+    return f"Replace with median ({med:.1f}) or remove rows if critical field."
 
 
 # ══════════════════════════════════════════════════════
