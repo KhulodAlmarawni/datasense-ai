@@ -508,7 +508,30 @@ def get_measures(tool, metrics, groups, time_cols):
 
 
 # ══════════════════════════════════════════════════════
-# HEADER
+# SIDEBAR
+# ══════════════════════════════════════════════════════
+
+with st.sidebar:
+    st.markdown("""
+    <div style="padding:4px 0 16px">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">Data<span style="color:#6366f1">Sense</span></div>
+      <div style="font-size:9px;font-family:'JetBrains Mono';color:#3a3a5a;letter-spacing:2px;margin-top:2px">DATASET ANALYZER</div>
+    </div>
+    <div style="height:1px;background:#1a1a30;margin-bottom:20px"></div>
+    <div style="font-size:9px;font-family:'JetBrains Mono';color:#3a3a5a;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px">Analytics Tool</div>
+    """, unsafe_allow_html=True)
+    tool = st.radio("Analytics Tool", ["Power BI", "Python", "SQL", "Tableau", "Excel"], label_visibility="collapsed")
+    st.markdown("""
+    <div style="height:1px;background:#1a1a30;margin:20px 0 16px"></div>
+    <div style="font-size:9px;font-family:'JetBrains Mono';color:#3a3a5a;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Upload Dataset</div>
+    <div style="font-size:11px;color:#4a4a6a;font-family:'JetBrains Mono';margin-bottom:10px;line-height:1.7">CSV or Excel — up to 30,000 rows</div>
+    """, unsafe_allow_html=True)
+    uploaded = st.file_uploader("Upload", type=["csv","xlsx","xls"], label_visibility="collapsed")
+    if uploaded:
+        st.markdown(f'<div style="margin-top:8px;padding:8px 12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:10px;font-family:JetBrains Mono;color:#10b981">uploaded: {uploaded.name}</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════
+# MAIN AREA
 # ══════════════════════════════════════════════════════
 
 st.markdown("""
@@ -519,11 +542,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Tool selector — label above, pills below, no box wrapper
-
-uploaded = st.file_uploader("Upload dataset", type=["csv","xlsx","xls"], label_visibility="collapsed")
-
 if not uploaded:
+    st.markdown("""
+    <div style="display:flex;align-items:center;justify-content:center;height:50vh;flex-direction:column;gap:14px">
+      <div style="font-size:13px;font-family:'JetBrains Mono';color:#3a3a5a;text-align:center;line-height:2">
+        Upload your dataset from the sidebar to begin
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 try:
