@@ -90,54 +90,61 @@ def classify_column(col_name, series):
     """Classify column into: id, metric, group, time, location, flag, useless"""
     name = col_name.lower().replace('_',' ').replace('-',' ')
     filled = series.dropna()
-
-    # Time detection
-    try:
-        pd.to_datetime(filled.iloc[:20], format="mixed", dayfirst=False)
-        return "time"
-    except: pass
-
-    # ID detection — high cardinality + numeric or name contains id/key/code patterns
-    id_keywords = ['_id','_key','_code','_num','_no ','_ref','_uuid','_hash']
-    is_id_name = any(k in f' {name} ' or name.endswith(k.strip()) for k in id_keywords)
-    is_high_card = filled.nunique() / len(filled) > 0.7 if len(filled) > 0 else False
-
-    if is_id_name and is_high_card:
-        return "id"
+    if len(filled) == 0: return "empty"
 
     # Useless — single value
     if filled.nunique() <= 1:
         return "useless"
 
-    # Location detection
-    loc_keywords = ['lat','lon','lng','latitude','longitude','coordinate','location','geo']
+    # Location detection — before anything else
+    loc_keywords = ['lat','lon','lng','latitude','longitude','coordinate','geo']
     if any(k in name for k in loc_keywords):
         return "location"
 
-    # Time-like numbers (hour, day, month, year, week)
-    time_keywords = ['hour','day','month','year','week','quarter','date','time','period']
-    if any(k in name for k in time_keywords):
+    # ID detection — name has id/key pattern AND high cardinality
+    id_keywords = ['_id','_key','_uuid','_hash','_ref']
+    is_id_name = any(name.endswith(k.strip('_')) or f' {k.strip()} ' in f' {name} ' for k in id_keywords)
+    is_high_card = filled.nunique() / len(filled) > 0.7 if len(filled) > 0 else False
+    if is_id_name and is_high_card:
+        return "id"
+
+    # Time detection — ONLY if column contains date-like strings (not pure numbers)
+    filled_str = filled.astype(str).str.strip()
+    has_date_pattern = filled_str.str.match(r'\d{4}-\d{2}|\d{2}/\d{2}|\d{4}/\d{2}').any()
+    if has_date_pattern:
         try:
-            nums = pd.to_numeric(filled, errors='coerce').dropna()
-            if name.replace(' ','') in ['hour','creationhour','orderhour'] and nums.max() <= 23:
-                return "time_num"
-            if 'month' in name and nums.max() <= 12:
-                return "time_num"
-            if 'year' in name and nums.nunique() <= 10:
-                return "time_num"
+            pd.to_datetime(filled_str.iloc[:20], format="mixed", dayfirst=False)
+            return "time"
         except: pass
 
-    # Numeric metric
+    # Numeric columns
     try:
         nums = pd.to_numeric(filled, errors='coerce').dropna()
-        if len(nums) / len(filled) > 0.9:
-            # Flag/binary
-            if nums.nunique() <= 2 and set(nums.unique()).issubset({0,1}):
+        if len(nums) / max(len(filled), 1) > 0.85:
+
+            # Hour grouper — small range 0-23
+            if 'hour' in name and nums.max() <= 23 and nums.min() >= 0:
+                return "time_num"
+
+            # Month grouper
+            if 'month' in name and nums.max() <= 12 and nums.min() >= 1:
+                return "time_num"
+
+            # Year grouper — few unique values
+            if 'year' in name and nums.nunique() <= 15:
+                return "time_num"
+
+            # Binary flag
+            if nums.nunique() == 2 and set(nums.unique()).issubset({0, 1}):
                 return "flag"
-            # Group-like numeric (very few unique values)
-            if nums.nunique() <= 15 and nums.nunique() / len(nums) < 0.01:
+
+            # Group-like numeric — very few unique values relative to total
+            if nums.nunique() <= 20 and nums.nunique() / len(nums) < 0.005:
                 return "group_num"
+
+            # True metric — continuous numeric with real variance
             return "metric"
+
     except: pass
 
     # Categorical group
