@@ -234,7 +234,11 @@ def missing_advice(col_name, series, df):
         return f"Replace with 0 if absence means no charge, or median ({series.median():.1f}) if it's a recording gap."
 
     # Default
-    return f"Replace with median ({series.median():.1f}) or remove rows if critical field."
+    try:
+        med = pd.to_numeric(series, errors='coerce').median()
+        return f"Replace with median ({med:.1f}) or remove rows if critical field."
+    except:
+        return f"Replace with most frequent value or remove rows if critical field."
 
 
 # ══════════════════════════════════════════════════════
